@@ -13,9 +13,8 @@ export default function AppTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
-          let iconName;
-
-          // Velg ikon basert på rutenavn
+          let iconName: keyof typeof Ionicons.glyphMap; 
+          
           switch (route.name) {
             case 'Home':
               iconName = 'home-outline';
@@ -34,12 +33,11 @@ export default function AppTabs() {
               break;
           }
 
-          // Returner ikonet
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: 'white',
         tabBarInactiveTintColor: 'gray',
-        headerShown: false, 
+        headerShown: false,
       })}
     >
       <Tab.Screen

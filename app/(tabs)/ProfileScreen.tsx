@@ -1,5 +1,3 @@
-// src/screens/ProfilePage.tsx
-
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -15,26 +13,29 @@ import {
   Alert,
   TouchableOpacity,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { getAuth, signOut } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { getDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 import { getPostsByArtist } from '@/api/postApi';
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { ArtworkData, CommentData } from '@/utils/artWorkData'; // Sørg for at CommentData er definert
+import { ArtworkData, CommentData } from '@/utils/artWorkData'; 
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-// Standard profilbilde
-const defaultProfileImageUri = Image.resolveAssetSource(require('../../assets/images/default-profile.png')).uri;
+// for at bilde skal være kombatibelt med både web og mobil
+const defaultProfileImageUri = Platform.OS === 'web'
+  ? require('../../assets/images/default-profile.png') 
+  : Image.resolveAssetSource(require('../../assets/images/default-profile.png')).uri; 
 
-// Definer UserData interface med nødvendige felter
+
 interface UserData {
   username: string;
   bio: string;
-  profileImage: string;
+  profileImage?: string;
   email: string;
   website: string;
   savedPosts: string[];
@@ -56,7 +57,6 @@ const ProfilePage = () => {
   const [newProfileImage, setNewProfileImage] = useState<string | null>(null);
   const [upcomingExhibitionsData, setUpcomingExhibitionsData] = useState<any[]>([]);
 
-  // Tilstandsvariabler for likes og saves
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
 
@@ -70,32 +70,31 @@ const ProfilePage = () => {
           const userData = userDoc.data() as UserData;
           setUser({
             ...userData,
-            username: userData.username || currentUser.displayName || 'Brukernavn ikke tilgjengelig',
-            email: userData.email || 'Ingen e-post tilgjengelig',
+            username: userData.username || currentUser.displayName || 'Unknown',
+            email: userData.email || 'No e-mail available.',
             profileImage: userData.profileImage || defaultProfileImageUri,
             savedPosts: userData.savedPosts || [],
           });
-
-          // Initialize savedPosts set
-          setSavedPosts(new Set(userData.savedPosts || []));
         } else {
           const newUser: UserData = {
-            username: currentUser.displayName || 'Brukernavn ikke tilgjengelig',
-            bio: 'Ingen bio tilgjengelig',
-            profileImage: defaultProfileImageUri,
-            email: currentUser.email || 'Ingen e-post tilgjengelig',
-            website: 'Ingen nettside tilgjengelig',
+            username: currentUser.displayName || 'Unknown',
+            bio: 'No bio updated',
+            profileImage: defaultProfileImageUri, 
+            email: currentUser.email || 'Unknown email',
+            website: 'No website updated',
             savedPosts: [],
           };
           await setDoc(userRef, newUser);
           setUser(newUser);
         }
+      
       }
       setLoading(false);
     };
-
+  
     fetchUserData();
   }, [auth]);
+  
 
   useEffect(() => {
     const fetchUserPosts = async () => {
@@ -149,10 +148,10 @@ const ProfilePage = () => {
           : prev
       );
       setEditProfileVisible(false);
-      Alert.alert('Profil oppdatert!');
+      Alert.alert('Profile updated!');
     } catch (error) {
-      console.error('Feil ved oppdatering av profil:', error);
-      Alert.alert('Noe gikk galt ved oppdatering av profil.');
+      console.error('Something went wrong:', error);
+      Alert.alert('Something went wrong.');
     }
   };
 
@@ -175,10 +174,10 @@ const ProfilePage = () => {
           });
         }
 
-        Alert.alert('Profilbildet er oppdatert!');
+        Alert.alert('Profilepicture was updated!');
       } catch (error) {
-        console.error('Feil ved opplasting av bilde:', error);
-        Alert.alert('Noe gikk galt ved opplasting av bildet.');
+        console.error('Something went wrong', error);
+        Alert.alert('Something went wrong.Try again');
       }
     }
   };
@@ -186,7 +185,6 @@ const ProfilePage = () => {
   const uploadImageToFirebase = async (uri: string) => {
     const fetchResponse = await fetch(uri);
     if (!fetchResponse.ok) {
-      console.error('Failed to fetch image:', fetchResponse);
       throw new Error('Image fetch failed');
     }
     const blob = await fetchResponse.blob();
@@ -241,7 +239,6 @@ const ProfilePage = () => {
   // Funksjon for å håndtere likes
   const handleToggleLikePost = async (postId: string) => {
     if (likedPosts.has(postId)) {
-      // Fjern like
       setLikedPosts((prev) => {
         const updated = new Set(prev);
         updated.delete(postId);
@@ -253,9 +250,7 @@ const ProfilePage = () => {
           post.id === postId ? { ...post, likesCount: post.likesCount - 1 } : post
         )
       );
-      // Her kan du legge til en API-kall for å fjerne like fra backend
     } else {
-      // Legg til like
       setLikedPosts((prev) => new Set(prev).add(postId));
       // Oppdater likesCount i userPosts
       setUserPosts((prevPosts) =>
@@ -263,7 +258,6 @@ const ProfilePage = () => {
           post.id === postId ? { ...post, likesCount: post.likesCount + 1 } : post
         )
       );
-      // Her kan du legge til en API-kall for å legge til like i backend
     }
   };
 
@@ -282,7 +276,6 @@ const ProfilePage = () => {
           post.id === postId ? { ...post, savesCount: post.savesCount - 1 } : post
         )
       );
-      // Oppdater savedPosts i user data
       if (user) {
         const userRef = doc(db, 'users', auth.currentUser!.uid);
         const updatedSavedPosts = user.savedPosts.filter((id) => id !== postId);
@@ -296,11 +289,9 @@ const ProfilePage = () => {
             : prev
         );
       }
-      // Her kan du legge til en API-kall for å fjerne save fra backend
     } else {
-      // Legg til save
+    
       setSavedPosts((prev) => new Set(prev).add(postId));
-      // Oppdater savesCount i userPosts
       setUserPosts((prevPosts) =>
         prevPosts.map((post) =>
           post.id === postId ? { ...post, savesCount: post.savesCount + 1 } : post
@@ -320,7 +311,6 @@ const ProfilePage = () => {
             : prev
         );
       }
-      // Her kan du legge til en API-kall for å legge til save i backend
     }
   };
 
@@ -331,125 +321,156 @@ const ProfilePage = () => {
   return (
     <ScrollView contentContainerStyle={styles.scrollViewContainer}>
       <View style={[styles.container]}>
-        {/* Header */}
-        <View style={[styles.header, styles.darkContainer]}>
-          <Pressable onPress={handleImageSelection}>
-            <Image source={{ uri: user?.profileImage ? user.profileImage : defaultProfileImageUri }} style={styles.profileImage} />
-          </Pressable>
-          <Text style={[styles.name]}>{user?.username}</Text>
-        </View>
+      {/* Header */}
+<View style={[styles.header, styles.darkContainer]}>
+  <Pressable onPress={handleImageSelection}>
+  <Image
+  source={{ uri: user?.profileImage ? user.profileImage : defaultProfileImageUri }}
+  style={styles.profileImage}
+/>
 
+  </Pressable>
+  <TouchableOpacity style={styles.editProfileImageButton} onPress={handleImageSelection}>
+    <Text style={styles.editProfileImageText}>Edit</Text>
+    <MaterialIcons name="edit" size={16} color="#888" style={{marginLeft: 4}}/>
+
+  </TouchableOpacity>
+  <Text style={[styles.name]}>{user?.username}</Text>
+  </View>
+
+
+      
         {/* Info */}
         <View style={[styles.infoContainer, styles.darkContainer]}>
           <View style={styles.infoRow}>
-            <Ionicons name="person-circle-outline" size={24} color="#fff" style={styles.icon} />
             <Text style={styles.bio}>{user?.bio}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={24} color="#fff" style={styles.icon} />
+            <Ionicons name="mail-outline" size={16} color="#fff" style={styles.icon} />
             <Text style={styles.email}>{user?.email}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="globe-outline" size={24} color="#fff" style={styles.icon} />
+            <Ionicons name="globe-outline" size={16} color="#fff" style={styles.icon} />
             <Text style={styles.website}>{user?.website}</Text>
           </View>
-        </View>
-
-        {/* Edit Profile Button */}
+                {/* Edit Profile Button */}
         <Pressable style={styles.editProfileButton} onPress={() => setEditProfileVisible(true)}>
-          <Text style={styles.buttonText}>Rediger Profil</Text>
+          <Text style={styles.buttonText}>EDIT PROFILE</Text>
         </Pressable>
-
-        {/* Dine Kunstverk */}
-        <View style={[styles.savedPostsContainer, styles.darkContainer]}>
-          <Text style={styles.savedPostsTitle}>Dine kunstverk:</Text>
-          {loadingPosts ? (
-            <ActivityIndicator size="small" color="#007BFF" />
-          ) : userPosts.length > 0 ? (
-            <FlatList
-              data={userPosts}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => router.push(`/ArtWorkDetail/${item.id}`)}
-                  style={[styles.postItem, styles.darkContainer]}
-                >
-                  <Image source={{ uri: item.imageURL }} style={styles.postImage} />
-                  <View style={styles.postTextContainer}>
-                    <Text style={styles.postTitle}>{item.title}</Text>
-                    <Text numberOfLines={2} style={styles.postDescription}>
-                      {item.description}
-                    </Text>
-                    {/* Statistikk Container */}
-                    <View style={styles.postStatsContainer}>
-                      {/* Likes */}
-                      <TouchableOpacity style={styles.statItem} onPress={() => handleToggleLikePost(item.id)}>
-                        <Ionicons name={likedPosts.has(item.id) ? "heart" : "heart-outline"} size={20} color="#fff" />
-                        {item.likesCount > 0 && (
-                          <Text style={styles.statText}>{item.likesCount}</Text>
-                        )}
-                      </TouchableOpacity>
-                      {/* Saves */}
-                      <TouchableOpacity style={styles.statItem} onPress={() => handleToggleSavePost(item.id)}>
-                        <Ionicons name={savedPosts.has(item.id) ? "bookmark" : "bookmark-outline"} size={20} color="#fff" />
-                        {item.savesCount > 0 && (
-                          <Text style={styles.statText}>{item.savesCount}</Text>
-                        )}
-                      </TouchableOpacity>
-                      {/* Comments */}
-                      <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/ArtWorkDetail/${item.id}`)}>
-                        <View style={styles.commentIconContainer}>
-                          <Ionicons name="chatbubble-outline" size={20} color="#fff" />
-                          {item.commentsCount > 0 && (
-                            <Text style={styles.commentCount}>{item.commentsCount}</Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Pressable>
-              )}
-              contentContainerStyle={styles.listContent}
-            />
-          ) : (
-            <Text style={styles.noExhibitionsText}>Du har ikke lastet opp noe enda.</Text>
-          )}
         </View>
 
-        {/* Dine Kommende Utstillinger */}
-        <View style={[styles.savedPostsContainer, styles.darkContainer]}>
-          <Text style={styles.savedPostsTitle}>Dine kommende utstillinger:</Text>
-          {upcomingExhibitionsData && upcomingExhibitionsData.length > 0 ? (
-            upcomingExhibitionsData.map((exhibition, index) => (
-              <Text key={index} style={styles.upcomingExhibitionItem}>
-                {exhibition.name} - {exhibition.date} - {exhibition.location}
-              </Text>
-            ))
-          ) : (
-            <Text style={styles.noExhibitionsText}>Du har ingen kommende utstillinger.</Text>
-          )}
+
+      
+
+  {/* Brukers Kunstverk */}
+<View style={[styles.savedPostsContainer, styles.darkContainer]}>
+  <Text style={styles.savedPostsTitle}>Your artwork:</Text>
+  {loadingPosts ? (
+    <ActivityIndicator size="small" color="#007BFF" />
+  ) : userPosts.length > 0 ? (
+    <FlatList
+      data={userPosts}
+      keyExtractor={(item) => item.id}
+      horizontal={true} 
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => router.push(`/ArtWorkDetail/${item.id}`)}
+          style={[styles.postItem, styles.darkContainer]}
+        >
+          <Image source={{ uri: item.imageURL }} style={styles.postImage} />
+          <View style={styles.postTextContainer}>
+            <Text style={styles.postTitle}>{item.title}</Text>
+            <Text numberOfLines={2} style={styles.postDescription}>
+              {item.description}
+            </Text>
+            {/* Statistikk Container */}
+            <View style={styles.postStatsContainer}>
+              {/* Likes */}
+              <TouchableOpacity style={styles.statItem} onPress={() => handleToggleLikePost(item.id)}>
+                <Ionicons name={likedPosts.has(item.id) ? "heart" : "heart-outline"} size={20} color="#fff" />
+                {item.likesCount > 0 && (
+                  <Text style={styles.statText}>{item.likesCount}</Text>
+                )}
+              </TouchableOpacity>
+              {/* Saves */}
+              <TouchableOpacity style={styles.statItem} onPress={() => handleToggleSavePost(item.id)}>
+                <Ionicons name={savedPosts.has(item.id) ? "bookmark" : "bookmark-outline"} size={20} color="#fff" />
+                {item.savesCount > 0 && (
+                  <Text style={styles.statText}>{item.savesCount}</Text>
+                )}
+              </TouchableOpacity>
+              {/* Comments */}
+              <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/ArtWorkDetail/${item.id}`)}>
+                <View style={styles.commentIconContainer}>
+                  <Ionicons name="chatbubble-outline" size={20} color="#fff" />
+                  {item.commentsCount > 0 && (
+                    <Text style={styles.commentCount}>{item.commentsCount}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      )}
+      contentContainerStyle={styles.listContent}
+      showsHorizontalScrollIndicator={false} 
+    />
+  ) : (
+    <Text style={styles.noExhibitionsText}>You dont have any uploaded artwork yet.</Text>
+  )}
+</View>
+
+{/* Dine Kommende Utstillinger */}
+<View style={[styles.savedPostsContainer, styles.darkContainer]}>
+  <Text style={styles.savedPostsTitle}>Your upcoming exhibitons:</Text>
+  <FlatList
+    data={upcomingExhibitionsData}
+    keyExtractor={(item, index) => index.toString()}
+    horizontal={true} 
+    renderItem={({ item }) => (
+  
+      <View style={styles.listItem}>
+        <Text style={styles.listItemTitle}>{item.name || "Ukjent utstilling"}</Text>
+
+        <View style={styles.listItemRow}>
+          <Ionicons name="location-outline" size={16} color="#888" style={styles.listItemIcon} />
+          <Text style={styles.listItemText}>{item.location || "Ukjent by"}</Text>
         </View>
+
+        <View style={styles.listItemRow}>
+          <Ionicons name="calendar-outline" size={16} color="#888" style={styles.listItemIcon} />
+          <Text style={styles.listItemText}>Date: {item.date || "Ukjent dato"}</Text>
+        </View>
+      </View>
+  
+    )}
+    contentContainerStyle={styles.listContent}
+    showsHorizontalScrollIndicator={false} 
+  />
+</View>
+
+
 
         {/* Logg Ut Button */}
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.buttonText}>Logg Ut</Text>
+          <Text style={styles.buttonText}>LOG OUT</Text>
         </Pressable>
 
         {/* Rediger Profil Modal */}
         <Modal visible={editProfileVisible} animationType="slide" transparent={true}>
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Rediger Profil</Text>
+              <Text style={styles.modalTitle}>Edit</Text>
               <ScrollView>
                 <Text style={styles.modalLabel}>Bio</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={newBio}
                   onChangeText={(text) => setNewBio(text)}
-                  placeholder="Skriv din bio her"
+                  placeholder="Write in your bio.."
                   placeholderTextColor="#aaa"
                 />
-                <Text style={styles.modalLabel}>Nettside</Text>
+                <Text style={styles.modalLabel}>Webpage</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={newWebsite}
@@ -458,10 +479,10 @@ const ProfilePage = () => {
                   placeholderTextColor="#aaa"
                 />
                 <Pressable style={styles.saveButton} onPress={handleEditProfile}>
-                  <Text style={styles.saveButtonText}>Lagre Endringer</Text>
+                  <Text style={styles.saveButtonText}>SAVE</Text>
                 </Pressable>
                 <Pressable style={styles.cancelButton} onPress={() => setEditProfileVisible(false)}>
-                  <Text style={styles.cancelButtonText}>Avbryt</Text>
+                  <Text style={styles.cancelButtonText}>CANCEL</Text>
                 </Pressable>
               </ScrollView>
             </View>
@@ -487,7 +508,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1c1c1c',
     borderRadius: 10,
     padding: 15,
-    marginBottom: 15,
+    marginBottom: 20,
   },
   header: {
     alignItems: 'center',
@@ -497,49 +518,86 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: 15,
+    marginBottom: 10, 
+  },
+  editProfileImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    color: '#888',
+    fontWeight: 'bold',
+  },
+  editProfileImageText: {
+    marginLeft: 5,
+    color: '#888',
+    fontSize: 16,
   },
   name: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  logoutButton: {
-    marginTop: 15,
-    backgroundColor: '#e63946',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-  },
   editProfileButton: {
+    fontFamily: 'Montserrat',
+    backgroundColor: '#CBE8F4',
+    paddingVertical: 12, 
+    paddingHorizontal: 40, 
+    borderRadius: 10, 
+    alignSelf: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+},
+ logoutButton: {
     marginTop: 10,
-    backgroundColor: '#007BFF',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 20,
+    backgroundColor: '#CBE8F4',
+    paddingVertical: 12, 
+    paddingHorizontal: 40, 
+    borderRadius: 10, 
+    alignSelf: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  buttonText: {
-    color: '#ffffff',
+ buttonText: {
+    color: '#000',
     fontWeight: '600',
+    textAlign: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    fontFamily: 'Montserrat',
+    fontSize: 12,
+
   },
   infoContainer: {
     marginBottom: 20,
+    marginTop: 10,
   },
   bio: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#fff',
     flex: 1,
+    fontFamily: 'QuicksandRegular'
   },
   email: {
     fontSize: 14,
     color: '#888',
     flex: 1,
+    flexWrap: 'wrap', 
+    fontFamily: 'QuicksandRegular'
+
   },
   website: {
     fontSize: 14,
     color: '#1e90ff',
     textDecorationLine: 'underline',
     flex: 1,
+    flexWrap: 'wrap', 
+    fontFamily: 'QuicksandRegular',
+
+
   },
   loadingIndicator: {
     flex: 1,
@@ -572,6 +630,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingVertical: 5,
+    padding: 5,
   },
   postTitle: {
     fontSize: 16,
@@ -615,6 +674,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 5,
     color: '#fff',
+    fontFamily: 'QuicksandRegular',
   },
   modalInput: {
     borderWidth: 1,
@@ -629,12 +689,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 5,
-    backgroundColor: '#0096C7',
+    backgroundColor: '#CBE8F4',
     marginBottom: 10,
+    
   },
   saveButtonText: {
-    color: '#fff',
+    color: '#000',
     textAlign: 'center',
+    fontFamily: 'Montserrat',
   },
   cancelButton: {
     paddingHorizontal: 12,
@@ -646,11 +708,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#ccc',
     textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'Montserrat',
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    flexWrap: 'wrap',
   },
   icon: {
     marginRight: 10,
@@ -680,6 +745,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 10,
+  },
+  listItemIcon: {
+    marginRight: 5,
+  },
+  listItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  listItemText: {
+    color: '#ccc',
+    fontSize: 14,
+    fontFamily: 'Quicksand-Regular',
+  },
+  listItem: {
+    padding: 15,
+    backgroundColor: "#2c2c2c",
+    marginBottom: 10,
+    borderRadius: 10,
+    marginRight: 15,
+  },
+  listItemTitle: {
+    fontWeight: "bold",
+    fontSize: 18,
+    color: "#ffffff",
+    fontFamily: 'Quicksand-Bold',
   },
 });
+
+
+
+

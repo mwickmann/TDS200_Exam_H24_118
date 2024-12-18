@@ -1,22 +1,23 @@
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TextInput,
   Pressable,
   ActivityIndicator,
-  FlatList,
 } from "react-native";
-import MapView, { Marker, Callout } from "react-native-maps";
 import * as Location from "expo-location";
 import { db } from "@/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import MapComponent from "@/components/MapComponent";
+import ExhibitionList from "@/components/ExhibitionList";
+import { calculateDistance } from "@/utils/locationUtils";
+import Constants from 'expo-constants';
 
 type Exhibition = {
-  date: ReactNode;
   id: string;
   artist: string;
   exhibitionName: string;
@@ -26,6 +27,7 @@ type Exhibition = {
     longitude: number;
   };
   city: string;
+  date: string;
 };
 
 const DiscoverScreen = () => {
@@ -35,9 +37,21 @@ const DiscoverScreen = () => {
   const [nearbyExhibitions, setNearbyExhibitions] = useState<Exhibition[]>([]);
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const SEARCH_RADIUS_KM = 10;
 
-  const SEARCH_RADIUS_KM = 10; // Definer radius for "Utstillinger nær deg" i kilometer
+ 
 
+
+  // Google API KEY for å få opp MAP på WEB.
+const GOOGLE_API_KEY = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
+useEffect(() => {
+  console.log("Google API Key from DiscoverScreen:", GOOGLE_API_KEY);
+}, [GOOGLE_API_KEY]);
+
+
+
+// henter ut alle utstillinger i nærheten
   useEffect(() => {
     const fetchLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -66,32 +80,27 @@ const DiscoverScreen = () => {
               data.exhibitions &&
               data.exhibitionDetails &&
               data.exhibitionDetails.length > 0 &&
-              data.postCoordinates &&
-              typeof data.postCoordinates.latitude === 'number' &&
-              typeof data.postCoordinates.longitude === 'number'
+              data.postCoordinates
             ) {
               const exhibitionDetail = data.exhibitionDetails[0];
               return {
                 id: doc.id,
-                exhibitionName: exhibitionDetail.name || "Ukjent utstilling",
+                exhibitionName: exhibitionDetail.name || "Unknown Exhibition",
                 description: data.description,
-                artist: data.artist || "Ukjent artist",
-                date: exhibitionDetail.date || "Ukjent dato",
+                artist: data.artist || "Unknown",
+                date: exhibitionDetail.date || "Unknown",
                 location: {
                   latitude: data.postCoordinates.latitude,
                   longitude: data.postCoordinates.longitude,
                 },
-                city: exhibitionDetail.location || "Ukjent by",
+                city: exhibitionDetail.location || "Unknown",
               };
             }
             return null;
           })
           .filter((exhibition) => exhibition !== null) as Exhibition[];
 
-        console.log("Fetched Exhibitions from Firebase: ", fetchedExhibitions);
-
         setExhibitions(fetchedExhibitions);
-        // Vi setter ikke lenger filteredExhibitions her
       } catch (error) {
         console.error("Error fetching exhibitions:", error);
       } finally {
@@ -102,21 +111,8 @@ const DiscoverScreen = () => {
     fetchExhibitions();
   }, []);
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Jordens radius i kilometer
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    return distance;
-  };
-
+  
+// henter ut søk
   useEffect(() => {
     if (location && exhibitions.length > 0) {
       const nearby = exhibitions.filter((exhibition) => {
@@ -130,7 +126,6 @@ const DiscoverScreen = () => {
       });
       setNearbyExhibitions(nearby);
 
-      // Oppdater filteredExhibitions til å vise nearbyExhibitions
       if (searchText.trim() === "") {
         setFilteredExhibitions(nearby);
       }
@@ -140,7 +135,7 @@ const DiscoverScreen = () => {
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       handleSearch();
-    }, 300); // 300ms debounce
+    }, 300);
 
     return () => clearTimeout(delayDebounce);
   }, [searchText, nearbyExhibitions]);
@@ -155,39 +150,17 @@ const DiscoverScreen = () => {
           exhibition.city.toLowerCase().includes(searchLower) ||
           exhibition.exhibitionName.toLowerCase().includes(searchLower)
       );
-
-      console.log("Filtered Exhibitions after Search: ", filtered);
-
       setFilteredExhibitions(filtered);
     }
   };
 
   const handleExhibitionPress = (exhibition: Exhibition) => {
-    // Naviger til detaljside eller vis en modal
-    console.log("Exhibition pressed:", exhibition);
+    router.push(`/Exhibition/${exhibition.id}`);
   };
 
   if (isLoading || !location) {
     return <ActivityIndicator size="large" color="#007BFF" />;
   }
-
-  const renderItem = ({ item }: { item: Exhibition }) => (
-    <Pressable style={styles.listItem} onPress={() => handleExhibitionPress(item)}>
-      <Text style={styles.listItemTitle}>{item.exhibitionName || "Ukjent utstilling"}</Text>
-      <View style={styles.listItemRow}>
-        <Ionicons name="location-outline" size={16} color="#888" style={styles.listItemIcon} />
-        <Text style={styles.listItemText}>{item.city || "Ukjent by"}</Text>
-      </View>
-      <View style={styles.listItemRow}>
-        <Ionicons name="person-outline" size={16} color="#888" style={styles.listItemIcon} />
-        <Text style={styles.listItemText}>Artist: {item.artist}</Text>
-      </View>
-      <View style={styles.listItemRow}>
-        <Ionicons name="calendar-outline" size={16} color="#888" style={styles.listItemIcon} />
-        <Text style={styles.listItemText}>Dato: {item.date}</Text>
-      </View>
-    </Pressable>
-  );
 
   return (
     <View style={styles.container}>
@@ -196,10 +169,8 @@ const DiscoverScreen = () => {
         <TextInput
           style={styles.searchInput}
           value={searchText}
-          onChangeText={(text) => {
-            setSearchText(text);
-          }}
-          placeholder="Søk etter by eller utstilling..."
+          onChangeText={(text) => setSearchText(text)}
+          placeholder="Search for exhibitions nearby..."
           placeholderTextColor="#888"
         />
         {searchText.length > 0 && (
@@ -214,58 +185,16 @@ const DiscoverScreen = () => {
         )}
       </View>
 
-      <View style={styles.contentContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.latitude,
-            longitude: location.longitude,
-            latitudeDelta: 0.1,
-            longitudeDelta: 0.1,
-          }}
-          showsUserLocation={true}
-        >
-          {filteredExhibitions.map((exhibition) => (
-            <Marker
-              key={exhibition.id}
-              coordinate={{
-                latitude: exhibition.location.latitude,
-                longitude: exhibition.location.longitude,
-              }}
-            >
-              <Callout>
-                <View>
-                  <Text style={styles.calloutTitle}>
-                    {exhibition.exhibitionName || "Ukjent utstilling"}
-                  </Text>
-                  <Text style={{ color: "#aaa" }}>Artist: {exhibition.artist}</Text>
-                  <Text style={{ color: "#aaa" }}>Dato: {exhibition.date}</Text>
-                  <Text>{exhibition.description || "Ingen beskrivelse tilgjengelig"}</Text>
-                </View>
-              </Callout>
-            </Marker>
-          ))}
-        </MapView>
+      <MapComponent location={location} filteredExhibitions={filteredExhibitions} googleApiKey={""} />
 
-        <View style={styles.nearbyContainer}>
-          <Text style={styles.nearbyTitle}>Utstillinger nær deg</Text>
-          <FlatList
-            data={filteredExhibitions}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            ListEmptyComponent={() => (
-              <Text style={styles.noExhibitionsText}>Ingen utstillinger funnet.</Text>
-            )}
-          />
-        </View>
+      <View style={styles.nearbyContainer}>
+        <Text style={styles.nearbyTitle}>Exhibitions near you:</Text>
+        <Text style={styles.info}>Click on an Exhibition to see more info!</Text>
+        <ExhibitionList filteredExhibitions={filteredExhibitions} onExhibitionPress={handleExhibitionPress} />
       </View>
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -275,7 +204,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '80%',
+    width: '90%',
     height: 50,
     borderColor: '#ccc',
     borderWidth: 1,
@@ -283,7 +212,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 10,
     marginTop: 20,
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#000',
     alignSelf: 'center',
   },
   searchIcon: {
@@ -298,71 +227,25 @@ const styles = StyleSheet.create({
     height: '100%',
     color: '#fff',
     fontSize: 16,
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  map: {
-    width: Dimensions.get("window").width,
-    height: Dimensions.get("window").height * 0.4,
-    padding: 10,
-    borderRadius: 10,
-  },
-  calloutTitle: {
-    fontWeight: "bold",
-    fontSize: 16,
-    color: '#aaa',
+    fontFamily: 'QuicksandRegular'
   },
   nearbyContainer: {
     flex: 2,
     padding: 10,
     backgroundColor: "#1c1c1c",
-    paddingBottom: 10,
   },
   nearbyTitle: {
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 10,
     color: "#fff",
-    paddingHorizontal: 10,
-    fontFamily: 'Quicksand-Bold',
   },
-  listItem: {
-    padding: 15,
-    backgroundColor: "#2c2c2c",
-    marginBottom: 10,
-    borderRadius: 10,
-  },
-  listItemTitle: {
-    fontWeight: "bold",
-    fontSize: 18,
-    color: "#ffffff",
-    fontFamily: 'Quicksand-Bold',
-  },
-  listItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  listItemIcon: {
-    marginRight: 5,
-  },
-  listItemText: {
-    color: '#ccc',
-    fontSize: 14,
-    fontFamily: 'Quicksand-Regular',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#333',
-    marginVertical: 5,
-  },
-  noExhibitionsText: {
+  info: {
+    fontSize: 16,
     color: '#fff',
-    textAlign: 'center',
-    marginTop: 20,
-    fontFamily: 'Quicksand-Regular',
-  },
+    paddingBottom: 10,
+    fontFamily: 'QuicksandRegular'
+  }
 });
 
 export default DiscoverScreen;

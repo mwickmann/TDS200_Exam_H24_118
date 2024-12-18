@@ -1,63 +1,55 @@
-// src/providers/authctx.tsx
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { auth } from "../firebaseConfig";
-import { useRouter } from "expo-router";
+// Denne koden er hentet fra forelesning med Brage Hveding Ersdal
+import React, { createContext, ReactNode, useContext, useEffect, useState, Dispatch, SetStateAction } from "react";
+import { auth, db } from "@/firebaseConfig";
 import { onAuthStateChanged, User } from "firebase/auth";
-import React, {
-  createContext,
-  ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import { ActivityIndicator, View } from "react-native";
-import * as authApi from "../api/authApi";
-import { getDoc, doc } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
-import { ExtendedUser } from "@/providers/ExtendedUser"; // Importer ExtendedUser
+import { doc, getDoc } from "firebase/firestore";
+import { ActivityIndicator, View, Alert, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
+import * as authApi from "@/api/authApi"; 
+
+interface UserWithProfileImage extends User {
+  profileImage?: string;
+}
 
 type AuthContextType = {
-  signIn: (username: string, password: string) => Promise<void>;
   signOut: VoidFunction;
   userNameSession: string | null;
   isLoading: boolean;
-  user: ExtendedUser | null; // Oppdater til ExtendedUser
+  user: UserWithProfileImage | null;
+  setUserAuthSession: Dispatch<SetStateAction<UserWithProfileImage | null>>;
+  signIn: (email: string, password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function useAuthSession() {
-  const value = useContext(AuthContext);
-  if (!value) {
+  const context = useContext(AuthContext);
+  if (!context) {
     throw new Error("useAuthSession must be used within an AuthContext Provider");
   }
-  return value;
+  return context;
 }
 
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [userSession, setUserSession] = useState<string | null>(null);
-  const [userAuthSession, setUserAuthSession] = useState<ExtendedUser | null>(null); // Oppdater til ExtendedUser
+  const [userAuthSession, setUserAuthSession] = useState<UserWithProfileImage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
         if (user) {
-          const userRef = doc(db, 'users', user.uid);
+          const userRef = doc(db, "users", user.uid);
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setUserSession(user.displayName || user.email || "Anonymous");
-            setUserAuthSession({
-              ...user,
-              profileImage: userData.profileImage || undefined,
-            });
+            setUserAuthSession({ ...user, profileImage: userData.profileImage || null });
           } else {
             setUserSession(user.displayName || user.email || "Anonymous");
-            setUserAuthSession(user as ExtendedUser);
+            setUserAuthSession(user);
           }
         } else {
           setUserSession(null);
@@ -65,43 +57,72 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error("Error in authentication:", error);
-        setUserSession(null);
-        setUserAuthSession(null);
+        Alert.alert("Authentication Error", "An error occurred while fetching user data.");
       } finally {
-        setIsLoading(false); // Sørg for at den alltid settes til false
-        console.log("Finished loading, isLoading set to false");
+        setIsLoading(false);
       }
     });
 
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (userAuthSession) {
+      router.push("/HomeScreen");
+    }
+  }, [userAuthSession]);
+
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#0000ff" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#CBE8F4" />
       </View>
     );
   }
 
+  const signIn = async (email: string, password: string) => {
+    try {
+      await authApi.signIn(email, password);
+      // Navigasjon håndteres i AuthSessionProvider via onAuthStateChanged
+    } catch (error) {
+      console.error("SignIn Error:", error);
+      Alert.alert("Sign In Error");
+    }
+  };
+
+
+
   return (
     <AuthContext.Provider
       value={{
-        signIn: async (userName: string, password: string) => {
-          await authApi.signIn(userName, password);
-        },
         signOut: async () => {
-          await authApi.signOut();
-          setUserSession(null);
-          setUserAuthSession(null);
-          router.push("/"); // Naviger til index etter utlogging
+          try {
+            await authApi.signOut();
+            setUserSession(null);
+            setUserAuthSession(null);
+            router.push("/SignInScreen"); 
+          } catch (error: any) {
+            console.log("Sign Out Error:", error);
+            Alert.alert("Sign Out Error", error.message);
+          }
         },
         userNameSession: userSession,
         user: userAuthSession,
         isLoading,
+        setUserAuthSession,
+        signIn,
+     
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

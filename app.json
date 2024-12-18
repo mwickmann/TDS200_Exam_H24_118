@@ -2,6 +2,7 @@
   "expo": {
     "name": "ArtVista",
     "slug": "ArtVista",
+    "owner": "mwickmann",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -32,18 +33,27 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {
-        "origin": false
+        "origin": false,
+        "googleClientId": "802709983930-44oalfpt72tcfk8a6bmvml28onb12bjj.apps.googleusercontent.com"
       },
       "eas": {
         "projectId": "47ac272a-de94-4f07-ba41-835acbab3483"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/47ac272a-de94-4f07-ba41-835acbab3483"
     }
   }
 }

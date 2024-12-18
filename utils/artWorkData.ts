@@ -2,9 +2,13 @@ import { LocationObjectCoords } from "expo-location";
 
 // Interface representing the structure of an artwork
 export interface ArtworkData {
+  userProfileImage: any;
+  location: any;
+  exhibitionName: string;
+  date: any;
   savesCount: number;
   exhibitions: boolean;
-  exhibitionDetails: { id: string; name: string; location: string; date: string }[] | null;
+  exhibitionDetails: Exhibition[] | null;
   commentsCount: number;
   name: string;
   createdAt: string | number | Date;
@@ -43,6 +47,12 @@ export interface CommentObject {
   comment: CommentData;             // Comment data associated with this object
 }
 
-
+export interface Exhibition {
+  id: string;
+  name: string;
+  location: string;
+  date: string;
+  description: string;
+}
 
 

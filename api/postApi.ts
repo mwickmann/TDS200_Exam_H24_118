@@ -9,63 +9,91 @@ import {
   getDoc,
   getDocs,
   increment,
+  orderBy,
   query,
   setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
-import { uploadImageToFirebase } from "./imageApi"; // Importer funksjonen for bildeopplasting
-import { getDownloadUrl } from "@/firebaseConfig"; // Importer getDownloadUrl-funksjonen
+import { uploadImageToFirebase } from "./imageApi"; 
+import { getDownloadUrl } from "@/firebaseConfig"; 
 import { Exhibition } from "@/utils/artWorkData";
 import { router } from "expo-router";
 
 
+
+// Laster opp nytt innlegg til firebase
 export const createArtWorkPost = async (post: ArtworkData) => {
   try {
-    // Last opp bildet og få nedlastings-URLen
     const firebaseImage = await uploadImageToFirebase(post.imageURL);
     if (firebaseImage === "ERROR") return;
     const postImageDownloadUrl = await getDownloadUrl(firebaseImage);
 
-    // Lagre postdata med nedlastings-URLen
     const postWithImageData: ArtworkData = {
       ...post,
       imageURL: postImageDownloadUrl,
+      location: post.location ?? null,
+      date: post.date ?? null,
+      exhibitionDetails: post.exhibitionDetails ?? null,
+      userProfileImage: post.userProfileImage ?? null
     };
 
-    // Legg til innlegget i Firestore
+    // Legger til innlegget i Firestore
     const docRef = await addDoc(collection(db, "posts"), postWithImageData);
     console.log("Document written with ID:", docRef.id);
 
-    // Naviger tilbake til forrige skjerm
-    router.back();
   } catch (e) {
     console.log("Error adding document:", e);
   }
 };
 
+
+// Henter alle innlegg fra Firestore, sortert etter nyeste først
 export const getAllPosts = async (): Promise<ArtworkData[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, "posts"));
+    // Bruker query med sortering basert på timestamp i synkende rekkefølge
+    const postsQuery = query(collection(db, "posts"), orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(postsQuery);
+
     const posts: ArtworkData[] = [];
 
-    querySnapshot.forEach((doc) => {
+    for (const docSnap of querySnapshot.docs) {
+      const postData = docSnap.data();
+      let userProfileImage = null;
+
+      // Hent profilbilde for bruker 
+      if (postData.userId) {
+        try {
+          const userDocRef = doc(db, "users", postData.userId);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            userProfileImage = userData.profileImage || null;
+          }
+        } catch (error) {
+          console.error(`Error fetching profile image for userId: ${postData.userId}`, error);
+        }
+      }
+
       posts.push({
-        id: doc.id, // Bruk alltid Firebase-genererte IDen
-        ...doc.data(),
-        commentsCount: Array.isArray(doc.data().comments) ? doc.data().comments.length : 0,
+        id: docSnap.id,
+        ...postData,
+        commentsCount: Array.isArray(postData.comments) ? postData.comments.length : 0,
+        userProfileImage,
       } as ArtworkData);
-    });
+    }
 
     return posts;
-  } catch (e) {
-    console.error("Error getting posts:", e);
+  } catch (error) {
+    console.error("Error fetching posts:", error);
     return [];
   }
 };
 
 
-      export const getPostById = async (artworkId: string): Promise<ArtworkData | null> => {
+// Henter post utifra ID fra firebase
+  export const getPostById = async (artworkId: string): Promise<ArtworkData | null> => {
         try {
           console.log("Searching for artwork with id:", artworkId);
           const q = query(collection(db, "posts"), where("id", "==", artworkId)); // Søk basert på feltet "id"
@@ -85,6 +113,8 @@ export const getAllPosts = async (): Promise<ArtworkData[]> => {
         }
       };
 
+      
+      // Henter posts utifra Kunstner
       export const getPostsByArtist = async (artistName: string): Promise<ArtworkData[]> => {
         try {
           console.log("Fetching posts for artist:", artistName);
@@ -104,33 +134,8 @@ export const getAllPosts = async (): Promise<ArtworkData[]> => {
           return [];
         }
       };
-      
-      
 
-   
-      const logAllDocuments = async () => {
-        const querySnapshot = await getDocs(collection(db, "posts"));
-        querySnapshot.forEach((doc) => {
-          console.log(`Document ID: "${doc.id}"`);
-        });
-      };
-      
-      logAllDocuments();
-      
-
-      
-      
-      const removePostFromSavedInDatabase = async (postId: string) => {
-        const userId = auth.currentUser?.uid; // Hent bruker-ID fra Firebase Auth
-        if (!userId) {
-          console.error("User is not logged in, cannot remove saved post.");
-          return;
-        }
-        const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, {
-            savedPosts: arrayRemove(postId) 
-        });
-      };
+   // Henter posts utifra utstillings-ID
       export const fetchExhibitionsByIds = async (ids: string[]): Promise<Exhibition[]> => {
         try {
           const exhibitions = await Promise.all(
@@ -149,115 +154,115 @@ export const getAllPosts = async (): Promise<ArtworkData[]> => {
           return [];
         }
       };
-      
-      export const toggleSavePost = async (postId: string) => {
-        console.log("Toggling save for post ID:", postId); // postId skal være den Firebase-genererte ID-en (f.eks. "IhnoMQifPmtEdgQwqWyX")
-    
-        const userId = auth.currentUser?.uid;
-        if (!userId) {
-            console.error("User is not logged in, cannot toggle save.");
-            return;
-        }
-    
-        try {
-            // Finn dokumentet i "posts"-samlingen basert på postId
-            const postRef = doc(db, "posts", postId);
-            const postSnap = await getDoc(postRef);
-    
-            if (postSnap.exists()) {
-                const postData = postSnap.data();
-                const savedBy = postData.savedBy || [];
-    
-                // Oppdater dokumentet basert på om brukeren allerede har lagret posten
-                if (savedBy.includes(userId)) {
-                    await updateDoc(postRef, {
-                        savedBy: arrayRemove(userId),
-                    });
-                    console.log(`Post ${postId} removed from saved posts for user ${userId}`);
-    
-                    // Oppdater `savedPosts`-staten
-                    setSavedPosts((prevSavedPosts) => {
-                        const updatedSavedPosts = new Set(prevSavedPosts);
-                        updatedSavedPosts.delete(postId);
-                        return updatedSavedPosts;
-                    });
-                } else {
-                    await updateDoc(postRef, {
-                        savedBy: arrayUnion(userId),
-                    });
-                    console.log(`Post ${postId} saved by user ${userId}`);
-    
-                    // Oppdater `savedPosts`-staten
-                    setSavedPosts((prevSavedPosts) => {
-                        const updatedSavedPosts = new Set(prevSavedPosts);
-                        updatedSavedPosts.add(postId);
-                        return updatedSavedPosts;
-                    });
-                }
-            } else {
-                console.error(`Post with ID ${postId} does not exist.`);
-            }
-        } catch (error) {
-            console.error("Error toggling save for post:", error);
-        }
-    };
-    
-      export const toggleLikePost = async (postId: string) => {
-        console.log("Toggling like for post ID:", postId); // postId skal være postnavnet, f.eks. "postName-Mene"
+
+
+      // Bruker lagrer og fjerner lagret (en pos)t i firebase
+      export const toggleSavePost = async (postId: string): Promise<boolean> => {
+        console.log("Toggling save for post ID:", postId);
       
         const userId = auth.currentUser?.uid;
         if (!userId) {
-          console.error("User is not logged in, cannot toggle like.");
-          return;
+          console.error("User is not logged in, cannot toggle save.");
+          return false;
         }
       
         try {
-          // Finn dokumentet i "posts"-samlingen basert på feltet "id"
           const postsRef = collection(db, "posts");
           const q = query(postsRef, where("id", "==", postId));
           const querySnapshot = await getDocs(q);
       
           if (!querySnapshot.empty) {
-            const postDoc = querySnapshot.docs[0]; // Ta første resultat som matcher (forutsatt at "id" er unik)
+            const postDoc = querySnapshot.docs[0];
             const postRef = postDoc.ref;
       
-            // Hent eksisterende data for å oppdatere "likes" feltet
             const postData = postDoc.data();
-            const likes = postData.likes || [];
+            const savedBy: string[] = postData.savedBy || [];
       
-            // Oppdater dokumentet basert på om brukeren allerede har likt posten
+            const userRef = doc(db, "users", userId);
+      
+            if (savedBy.includes(userId)) {
+              await updateDoc(postRef, {
+                savedBy: arrayRemove(userId),
+                savesCount: increment(-1), 
+              });
+            
+      
+              await updateDoc(userRef, {
+                savedPosts: arrayRemove(postId),
+              });
+             
+            } else {
+              
+              await updateDoc(postRef, {
+                savedBy: arrayUnion(userId),
+                savesCount: increment(1), 
+              });
+         
+             
+              await updateDoc(userRef, {
+                savedPosts: arrayUnion(postId),
+              });
+      
+            }
+            return true; 
+          } else {
+          
+            return false;
+          }
+        } catch (error) {
+       
+          return false;
+        }
+      };
+
+      // Bruker liker og fjerner en like fra en post
+      export const toggleLikePost = async (postId: string): Promise<boolean> => {
+        const userId = auth.currentUser?.uid;
+        if (!userId) {
+          console.error("User is not logged in, cannot toggle like.");
+          return false;
+        }
+      
+        try {
+          const postsRef = collection(db, "posts");
+          const q = query(postsRef, where("id", "==", postId));
+          const querySnapshot = await getDocs(q);
+      
+          if (!querySnapshot.empty) {
+            const postDoc = querySnapshot.docs[0];
+            const postRef = postDoc.ref;
+      
+            const postData = postDoc.data();
+            const likes: string[] = postData.likes || [];
+      
+            const userRef = doc(db, "users", userId);
+            
             if (likes.includes(userId)) {
               await updateDoc(postRef, {
                 likes: arrayRemove(userId),
-                likesCount: increment(-1), // Reduser antall likes med 1
+                likesCount: increment(-1),
+              });      
+             
+              await updateDoc(userRef, {
+                likedPosts: arrayRemove(postId),
               });
-              console.log(`Post ${postId} unliked by user ${userId}`);
             } else {
               await updateDoc(postRef, {
                 likes: arrayUnion(userId),
-                likesCount: increment(1), // Øk antall likes med 1
+                likesCount: increment(1),
               });
               console.log(`Post ${postId} liked by user ${userId}`);
+      
+              await updateDoc(userRef, {
+                likedPosts: arrayUnion(postId),
+              });
             }
+            return true; 
           } else {
-            console.error(`Post with ID ${postId} does not exist.`);
+            return false;
           }
         } catch (error) {
-          console.error("Error toggling like for post:", error);
+          return false;
         }
       };
       
-      
-      
-
-
-      
-export function fetchPosts() {
-  throw new Error('Function not implemented.');
-}
-
-function setSavedPosts(arg0: (prevSavedPosts: any) => Set<unknown>) {
-  throw new Error("Function not implemented.");
-}
-
-

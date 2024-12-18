@@ -10,6 +10,8 @@ import {
   StyleSheet,
   Pressable,
   Image,
+  Platform,
+  TouchableOpacity, 
 } from "react-native";
 import { useAuthSession } from "@/providers/authctx";
 import * as commentApi from "@/api/commentApi";
@@ -17,12 +19,21 @@ import { fetchCommentsForPost } from "@/api/commentApi";
 import { CommentData } from "@/utils/artWorkData";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
+import { Ionicons } from "@expo/vector-icons";
 
-const defaultProfileImageUri = Image.resolveAssetSource(require('../assets/images/default-profile.png')).uri;
+const defaultProfileImageUri = Platform.OS === 'web'
+  ? require('../assets/images/default-profile.png').default
+  : Image.resolveAssetSource(require('../assets/images/default-profile.png')).uri;
+  
+interface CommentSectionProps {
+  postId: string;
+  onDeleteComment?: (commentId: string) => void;
+}
 
-const CommentSection = ({ postId }: { postId: string }) => {
+const CommentSection = ({ postId, onDeleteComment }: CommentSectionProps) => {
   const [comment, setComment] = useState("");
   const [comments, setComments] = useState<CommentData[]>([]);
+  const [showAllComments, setShowAllComments] = useState(false); 
   const { user } = useAuthSession();
 
   // Funksjon for å hente brukerens profilbilde fra Firestore
@@ -69,7 +80,6 @@ const CommentSection = ({ postId }: { postId: string }) => {
     }
   };
 
-  // Funksjon for å håndtere innsending av kommentarer
   const handleCommentSubmit = async () => {
     if (!user) {
       Alert.alert("Feil", "Du må være innlogget for å kommentere.");
@@ -82,7 +92,6 @@ const CommentSection = ({ postId }: { postId: string }) => {
     }
 
     try {
-      // Hent profilbildet hvis ikke tilgjengelig i user-objektet
       const profileImage = user.profileImage 
         ? user.profileImage 
         : await fetchUserProfile(user.uid);
@@ -91,32 +100,64 @@ const CommentSection = ({ postId }: { postId: string }) => {
         authorId: user.uid,
         authorName: user.displayName || "Anonymous",
         comment,
-        id: "", // ID kan genereres av backend eller Firebase
-        timestamp: Date.now(), // Lagre som Unix-tid
-        authorProfileImage: profileImage, // Sett profilbilde
+        id: "", 
+        timestamp: Date.now(), 
+        authorProfileImage: profileImage, 
       };
 
-      await commentApi.addComment(postId, newComment);
-      setComment(""); // Tøm input-feltet
-      fetchComments(); // Oppdater kommentarlisten
-      Alert.alert("Suksess", "Kommentaren ble lagt til!");
+      const newCommentId = await commentApi.addComment(postId, newComment);
+      const updatedComment = { ...newComment, id: newCommentId };
+      setComments((prev) => [...prev, updatedComment]);
+      setComment(""); 
+      Alert.alert("Success", "Comment added!");
     } catch (error) {
       console.error("Error adding comment:", error);
-      Alert.alert("Feil", "Kunne ikke legge til kommentaren.");
+      Alert.alert("Error", "Couldn't add the comment.");
     }
+  };
+
+  // Funksjon for å håndtere sletting av kommentarer
+  const handleDeleteComment = async (commentId: string) => {
+    Alert.alert(
+      "Confirm",
+      "Are you sure you want to delete the comment?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await commentApi.deleteComment(commentId, postId);
+              setComments((prev) => prev.filter((comment) => comment.id !== commentId));
+              Alert.alert("Suksess", "The comment was deleted.");
+              if (onDeleteComment) {
+                onDeleteComment(commentId);
+              }
+            } catch (error) {
+              console.error("Error deleting comment:", error);
+              Alert.alert("Something went wrong.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   useEffect(() => {
     fetchComments();
   }, [postId]);
 
+  // Bestem hvilke kommentarer som skal vises basert på showAllComments
+  const displayedComments = showAllComments ? comments : comments.slice(0, 2);
+
   return (
     <View style={styles.container}>
       <View style={styles.commentSection}>
-        <Text style={styles.title}>Kommentarer</Text>
+        <Text style={styles.title}>Comments:</Text>
         
         <FlatList
-          data={comments}
+          data={displayedComments}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View style={styles.commentItem}>
@@ -142,21 +183,40 @@ const CommentSection = ({ postId }: { postId: string }) => {
                 </View>
                 <Text style={styles.commentText}>{item.comment}</Text>
               </View>
+              {item.authorId === user?.uid && (
+                <Pressable onPress={() => handleDeleteComment(item.id)}>
+                  <Ionicons name="trash-outline" size={20} color="white" style={{ marginTop: 12 }} />
+                </Pressable>
+              )}
             </View>
           )}
-          ListEmptyComponent={<Text style={styles.noCommentsText}>Ingen kommentarer ennå.</Text>}
+          ListEmptyComponent={<Text style={styles.noCommentsText}>No comments yet..</Text>}
         />
+        
+        {/* Knapp for å vise alle kommentarer */}
+        {!showAllComments && comments.length > 2 && (
+          <TouchableOpacity style={styles.showAllButton} onPress={() => setShowAllComments(true)}>
+            <Text style={styles.showAllText}>Show comments...</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Knapp for å skjule kommentarer */}
+        {showAllComments && comments.length > 2 && (
+          <TouchableOpacity style={styles.showAllButton} onPress={() => setShowAllComments(false)}>
+            <Text style={styles.showAllText}>Hide comments...</Text>
+          </TouchableOpacity>
+        )}
         
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Skriv en kommentar..."
+            placeholder="Write a comment..."
             placeholderTextColor="#aaa"
             value={comment}
             onChangeText={setComment}
           />
           <Pressable style={styles.commentButton} onPress={handleCommentSubmit}>
-            <Text style={styles.commentButtonText}>Legg til</Text>
+            <Text style={styles.commentButtonText}>ADD</Text>
           </Pressable>
         </View>
       </View>
@@ -165,9 +225,12 @@ const CommentSection = ({ postId }: { postId: string }) => {
 };
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "#000000", 
+  },
   commentSection: {
     padding: 10,
-    backgroundColor: "#1c1c1c", // Mørk grå/svart bakgrunnsfarge
+    backgroundColor: "#1c1c1c", 
     borderRadius: 8,
     marginVertical: 10,
   },
@@ -184,41 +247,41 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#444", // Grå kantlinje for å passe til mørk tema
+    borderColor: "#444", 
     borderRadius: 5,
     padding: 10,
     marginBottom: 10,
-    color: "#fff", // Hvit tekst for input
+    color: "#fff", 
     backgroundColor: '#333',
   },
   commentButton: {
-    backgroundColor: "#007BFF",
+    backgroundColor: "#CBE8F4",
     borderRadius: 5,
     paddingVertical: 10,
+    marginBottom: 10,
     paddingHorizontal: 15,
     marginLeft: 10,
   },
   commentButtonText: {
-    color: "white",
+    color: "black",
     fontWeight: "bold",
+    fontFamily: 'Montserrat',
+    fontSize: 13,
   },
   noCommentsText: {
     textAlign: "center",
     fontStyle: "italic",
     color: "#888",
-    marginBottom: 16, // Øker avstanden nedenfor teksten
-    marginTop: 16, // Øker avstanden ovenfor teksten
+    marginBottom: 16, 
+    marginTop: 16, 
   },
   commentItem: {
     flexDirection: "row",
     marginBottom: 15,
     padding: 10,
-    backgroundColor: "#333", // Mørkere grå for kontrast mot bakgrunnen
+    backgroundColor: "#333", 
     borderRadius: 5,
-    shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
   },
   commentProfileImage: {
     width: 40,
@@ -246,8 +309,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#fff", // Gjør kommentarteksten lesbar på mørk bakgrunn
   },
-  container: {
-    backgroundColor: "#000000", // Sort bakgrunn for hele kommentarboksen
+  showAllButton: {
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  showAllText: {
+    color: "#fff", // En kontrastfarge for å indikere interaktivitet
+    fontStyle: 'italic',
+    textAlign: "center",
+    fontSize: 14,
   },
 });
 

@@ -1,20 +1,23 @@
-// firebaseConfig.js
-
+// Denne koden er hentet fra forelesning med Brage Hveding Ersdal
 import { initializeApp } from "firebase/app";
-import firebaseConfig from './firebaseEnv'; // Sørg for at stien er korrekt
-import { getFirestore } from "firebase/firestore";
+import firebaseConfig from './firebaseEnv'; 
+import { getFirestore, doc } from "firebase/firestore";
 import { getDownloadURL, getStorage, ref } from "firebase/storage";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, browserLocalPersistence } from 'firebase/auth';
+import { Platform } from "react-native";
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
+
+
 // Initialize Firebase Authentication with persistence
 export const auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage)
-});
-
+    persistence: Platform.OS === "web"
+    ? browserLocalPersistence
+    : getReactNativePersistence(ReactNativeAsyncStorage),
+  });
 // Initialize Firestore
 export const db = getFirestore(app);
 
@@ -25,6 +28,8 @@ const storage = getStorage(app);
 // Helper function to get a storage reference
 export const getStorageRef = (path) => ref(storage, path);
 
+  
+
 // Helper function to get the download URL
 export const getDownloadUrl = async (path) => {
     try {
@@ -32,6 +37,6 @@ export const getDownloadUrl = async (path) => {
         return url;
     } catch (error) {
         console.error("Error getting download URL:", error);
-        throw error; // Kaster feilen videre for håndtering der det kalles
+        throw error; 
     }
 };

@@ -1,3 +1,4 @@
+// Denne koden er hentet fra forelesning med Brage Hveding Ersdal
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const storeData = async (key: string, data: string) => {

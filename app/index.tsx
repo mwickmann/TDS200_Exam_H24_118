@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from "react-native";
 import { useRouter } from "expo-router";
-import { useTheme } from '../providers/ThemeSessionProvider'; // Importer useTheme fra ThemeProvider
+import { useTheme } from '../providers/ThemeSessionProvider'; 
 
 const GetStarted = () => {
   const router = useRouter();
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0.5, 0, 0, 0.5)", // Halvtransparent bakgrunn for tekstlesbarhet
+    backgroundColor: "rgba(0.5, 0, 0, 0.5)", 
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -53,7 +53,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontFamily: 'Quicksand-Regular',
     fontWeight: "bold",
     color: "#fff",
     marginBottom: 20,
@@ -61,17 +60,17 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    fontFamily: 'Quicksand-Regular',
+    fontFamily: 'QuicksandRegular',
     color: "#ddd",
     textAlign: "center",
     marginBottom: 40,
     lineHeight: 24,
   },
   button: {
-    backgroundColor: "#CBE8F4", // Endret farge til en finere grønn
-    paddingVertical: 18,        // Økt vertikal padding for å gjøre knappen større
-    paddingHorizontal: 80,      // Økt horisontal padding for å gjøre knappen større
-    borderRadius: 10,            // Redusert borderRadius for å gjøre knappen mer firkantet
+    backgroundColor: "#CBE8F4",
+    paddingVertical: 18,        
+    paddingHorizontal: 80,      
+    borderRadius: 10,   
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3,
@@ -85,11 +84,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#000000",
     fontWeight: "bold",
-    fontFamily: 'Montserrat-Bold',
+    fontFamily: 'Montserrat',
   },
   headerContainer: {
     alignItems: 'center',
-    marginTop: -120,    // Juster denne verdien for å flytte tittel og undertittel opp eller ned
-    marginBottom: 250, // Juster for å kontrollere avstand til knappen
+    marginTop: -120,    
+    marginBottom: 250, 
   },
 });
