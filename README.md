@@ -8,5 +8,8 @@
 
 ## Screenshots
 
-1. Log in 
+1. Welcome
 ![Welcome](./assets/screenshots/welcome.png)
+
+<img src="./assets/screenshots/welcome.png" alt="Welcome" width="600"/>
+
