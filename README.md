@@ -9,4 +9,4 @@
 ## Screenshots
 
 1. Log in 
-![Log Inn](@/assets/screenshots/login.png)
+![Welcome](./assets/screenshots/welcome.png)
