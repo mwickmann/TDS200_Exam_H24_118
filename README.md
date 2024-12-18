@@ -9,7 +9,5 @@
 ## Screenshots
 
 1. Welcome
-![Welcome](./assets/screenshots/welcome.png)
-
-<img src="./assets/screenshots/welcome.png" alt="Welcome" width="600"/>
+<img src="./assets/screenshots/welcome.png" alt="Welcome" width="100"/>
 
