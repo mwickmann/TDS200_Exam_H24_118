@@ -8,6 +8,7 @@
 
 ## Screenshots
 
-1. Welcome
-<img src="./assets/screenshots/welcome.png" alt="Welcome" width="100"/>
+1. ## Welcome 
+<img src="./assets/screenshots/welcome.png" alt="Welcome" width="300"/>
 
+ 
